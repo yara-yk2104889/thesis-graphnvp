@@ -1,0 +1,5 @@
+# Large preprocessed datasets (created by data/download_data.py)
+data/*.npz
+
+# Local Python environment
+.venv/
