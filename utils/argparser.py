@@ -45,8 +45,9 @@ def get_parser():
     parser.add_argument('-lr_decay_patience', default=200, type=float, help='learning rate decay patience')
     parser.add_argument('-lr_decay_min', default=0.00001, type=float, help='learning rate decay min')
     parser.add_argument('--dropout', type=float, default=0., help='dropout rate')
-    parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for Adam optimizer')
-    parser.add_argument('--beta2', type=float, default=0.9, help='beta2 for Adam optimizer')
+    # Official GraphNVP uses chainer's default Adam (beta1 0.9, beta2 0.999)
+    parser.add_argument('--beta1', type=float, default=0.9, help='beta1 for Adam optimizer')
+    parser.add_argument('--beta2', type=float, default=0.999, help='beta2 for Adam optimizer')
     parser.add_argument('--resume_epoch', type=int, default=0, help='resume training after this epoch')
     parser.add_argument('--resume', type=bool, default=False, help='resume training')
 

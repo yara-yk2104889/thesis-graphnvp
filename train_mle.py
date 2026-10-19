@@ -104,11 +104,8 @@ def main():
     all_novelty_rate = []
     print('start fitting.')
 
+    # Plain Adam with a constant learning rate, as in the official code (no LR schedule)
     optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), args.mle_lr, betas=(args.beta1, args.beta2))
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min',
-                                                     factor=args.lr_decay_factor,
-                                                     patience=args.lr_decay_patience,
-                                                     min_lr=args.lr_decay_min)
     optimizer.step()
 
     def generate_one(model, mute=False, cnt=None):
@@ -182,7 +179,6 @@ def main():
                 optimizer.zero_grad()
                 g_loss.backward()
                 optimizer.step()
-                scheduler.step(g_loss)
                 pbar.update()
                 if i_batch % args.show_loss_step == 0:
                     tqdm.write("Epoch %d, batch %d, Loss mle: %.5f" % (epoch, i_batch, g_loss.item()))
