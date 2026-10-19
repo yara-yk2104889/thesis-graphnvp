@@ -52,6 +52,7 @@ class GraphNvpModel(nn.Module):
             node_coupling = AdditiveAdjCoupling
             print("Additive Transformations")
         transforms = []
+        # num_coupling['channel'] = X-couplings (applied first), num_coupling['node'] = A-couplings
         for i in range(self.num_coupling['channel']):
             transforms += [channel_coupling(self.num_nodes, self.num_relations, self.num_features,
                                  self.masks['channel'][i % self.num_masks['channel']],

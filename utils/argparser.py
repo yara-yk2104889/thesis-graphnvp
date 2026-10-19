@@ -17,6 +17,9 @@ def get_parser():
     parser.add_argument('--num_atoms', type=int, default=9, help='Maximum number of atoms in a molecule')
     parser.add_argument('--num_rels', type=int, default=4, help='Number of bond types')
     parser.add_argument('--num_atom_types', type=int, default=4, help='Types of atoms that can be used in a molecule')
+    # Naming as in the official code: "node" = adjacency (A) couplings, which mask columns of A;
+    # "channel" = node-feature (X) couplings, which mask rows (atoms) of X.
+    # Defaults match the official argparser; the official QM9 run uses 36/27 couplings, 9/9 masks (see train.sh).
     parser.add_argument('--num_node_masks', type=int, default=9,
                         help='Number of node masks to be used in coupling layers')
     parser.add_argument('--num_channel_masks', type=int, default=4,
