@@ -1,22 +1,17 @@
 from time import time
 from utils.argparser import args
-import os, sys, copy
-import math
-import copy
+import os, sys
 import random
 import numpy as np
 import torch
 import torch.nn.functional as F
 from os.path import join as joinpath
 from rdkit import Chem
-import chainer
-from chainer.datasets import TransformDataset
-from chainer.dataset import iterator as iterator_module, convert
-from chainer_chemistry.datasets import NumpyTupleDataset
+from torch.utils.data import DataLoader, Subset
 from graph_nvp.hyperparams import Hyperparameters
 from graph_nvp.nvp_model import GraphNvpModel
 from utils import environment as env
-from utils.data_utils import construct_mol, save_mol_png
+from utils.data_utils import construct_mol, save_mol_png, NumpyTupleDataset
 from tqdm import tqdm
 
 def read_molecules(path):
@@ -63,16 +58,17 @@ def main():
         gnn_channels = {'gcn': [16, 128], 'hidden': [64, 256]}
         valid_idx = transform_zinc250k.get_val_ids()
 
-    dataset = NumpyTupleDataset.load(joinpath(args.data_dir, args.data_file))
-    dataset = TransformDataset(dataset, transform_fn)
+    dataset = NumpyTupleDataset(joinpath(args.data_dir, args.data_file), transform_fn)
 
+    # Same split as chainer's split_dataset / split_dataset_random
     if len(valid_idx) > 0:
-        train_idx = [t for t in range(len(dataset)) if t not in valid_idx]
-        n_train = len(train_idx)
-        train_idx.extend(valid_idx)
-        train, test = chainer.datasets.split_dataset(dataset, n_train, train_idx)
+        valid_set = set(valid_idx)
+        train_idx = [t for t in range(len(dataset)) if t not in valid_set]
+        train, test = Subset(dataset, train_idx), Subset(dataset, valid_idx)
     else:
-        train, test = chainer.datasets.split_dataset_random(dataset, int(len(dataset) * 0.8), seed=args.seed)
+        order = np.random.RandomState(args.seed).permutation(len(dataset))
+        n_train = int(len(dataset) * 0.8)
+        train, test = Subset(dataset, order[:n_train]), Subset(dataset, order[n_train:])
 
     num_masks = {'node': args.num_node_masks, 'channel': args.num_channel_masks}
     mask_size = {'node': args.node_mask_size, 'channel': args.channel_mask_size}
@@ -84,14 +80,9 @@ def main():
                                    mlp_channels=mlp_channels,
                                    gnn_channels=gnn_channels)
     model = GraphNvpModel(NVPmodel_params).to(args.device)
-    train_iter = chainer.iterators.SerialIterator(train, args.batch_size, repeat=False)
-
-    if isinstance(train_iter, iterator_module.Iterator):
-        iterator = {'main': train_iter}
-    # train_dataloader
-    dataloader = iterator['main']
+    # shuffle=True draws a new order every epoch (seeded by torch.manual_seed)
+    dataloader = DataLoader(train, batch_size=args.batch_size, shuffle=True)
     data_config, all_train_smiles = read_molecules(args.data_dir)
-    converter = convert.concat_examples
 
     # fitting
     t_total = time()
@@ -169,18 +160,16 @@ def main():
             batch_g_losses = []
             batch_cnt = 0
             epoch_example = 0
-            num_samples = len(dataloader.dataset)
-            num_batches = math.ceil(num_samples / args.batch_size)
+            num_batches = len(dataloader)
             pbar = tqdm(total=num_batches)
 
-            for i_batch, batch_data in enumerate(copy.copy(dataloader)):
+            for i_batch, batch_data in enumerate(dataloader):
                 batch_time_s = time()
                 loss = {}
-                in_arrays = converter(batch_data)
-                X, A, label = in_arrays[0], in_arrays[1], in_arrays[2]
-                X, A, label = torch.tensor(X, dtype=torch.float32).to(args.device), \
-                              torch.tensor(A, dtype=torch.float32).to(args.device), \
-                              torch.tensor(label, dtype=torch.float32).to(args.device)
+                X, A, label = batch_data[0], batch_data[1], batch_data[2]
+                X, A, label = X.float().to(args.device), \
+                              A.float().to(args.device), \
+                              label.float().to(args.device)
                 # Dequantization
                 X_prime = X + 0.9 * torch.rand(X.shape, device=args.device)
                 A_prime = A + 0.9 * torch.rand(A.shape, device=args.device)

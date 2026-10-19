@@ -1,13 +1,36 @@
-import chainer
-import chainer.functions as chainerF
 import numpy as np
-from chainer.backends import cuda
 from rdkit import Chem
 from rdkit.Chem import Draw
 import torch
+from torch.utils.data import Dataset
 
 atom_decoder_m = {0: 6, 1: 7, 2: 8, 3: 9, 4: 15, 5: 16, 6: 17, 7: 35, 8: 53}
 bond_decoder_m = {1: Chem.rdchem.BondType.SINGLE, 2: Chem.rdchem.BondType.DOUBLE, 3: Chem.rdchem.BondType.TRIPLE}
+
+
+class NumpyTupleDataset(Dataset):
+    """
+    Replacement for chainer_chemistry's NumpyTupleDataset.load + chainer's TransformDataset.
+    Reads the .npz written by data/download_data.py (arrays 'arr_0', 'arr_1', ... =
+    atomic numbers, adjacency, labels) and applies transform_fn to each example.
+    """
+    def __init__(self, filepath, transform_fn=None):
+        with np.load(filepath) as f:
+            self.arrays = []
+            i = 0
+            while 'arr_{}'.format(i) in f.files:
+                self.arrays.append(f['arr_{}'.format(i)])
+                i += 1
+        self.transform_fn = transform_fn
+
+    def __len__(self):
+        return len(self.arrays[0])
+
+    def __getitem__(self, idx):
+        example = tuple(a[idx] for a in self.arrays)
+        if self.transform_fn is not None:
+            example = self.transform_fn(example)
+        return example
 
 
 def flatten_graph_data(adj, x):
