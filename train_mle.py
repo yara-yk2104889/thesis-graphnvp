@@ -153,7 +153,8 @@ def main():
         return smiles, A, X, pure_valid, num_atoms
 
     def train(model):
-        for epoch in range(1+start_epoch, args.epochs + 1 - start_epoch):
+        # Continue from the epoch after the checkpoint up to --epochs (inclusive)
+        for epoch in range(start_epoch + 1, args.epochs + 1):
             # gen() at the end of each epoch calls model.eval(); switch back so BatchNorm trains
             model.train()
             batch_g_losses = []
