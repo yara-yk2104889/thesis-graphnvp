@@ -157,6 +157,8 @@ def main():
 
     def train(model):
         for epoch in range(1+start_epoch, args.epochs + 1 - start_epoch):
+            # gen() at the end of each epoch calls model.eval(); switch back so BatchNorm trains
+            model.train()
             batch_g_losses = []
             batch_cnt = 0
             epoch_example = 0
