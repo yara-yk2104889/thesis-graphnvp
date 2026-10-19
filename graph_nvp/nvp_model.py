@@ -4,8 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from utils.argparser import args
 from graph_nvp.hyperparams import Hyperparameters
-from graph_nvp.coupling import AffineNodeFeatureCoupling, AffineAdjCoupling, \
-    AdditiveNodeFeatureCoupling, AdditiveAdjCoupling
+from graph_nvp.coupling import AdditiveNodeFeatureCoupling, AdditiveAdjCoupling
 
 def gaussian_nll(x, mean, ln_var, reduce='sum'):
     if reduce not in ('sum', 'mean', 'no'):
@@ -44,13 +43,10 @@ class GraphNvpModel(nn.Module):
         self.prior_ln_var = nn.Parameter(torch.zeros([1]))  
         nn.init.constant_(self.prior_ln_var, 1e-5)
         self.constant_pi = torch.tensor([3.1415926535], device=args.device, dtype=torch.float32)
-        # AffineNodeFeatureCoupling found to be unstable.
-        channel_coupling = AffineNodeFeatureCoupling
-        node_coupling = AffineAdjCoupling
-        if self.additive_transformations:
-            channel_coupling = AdditiveNodeFeatureCoupling
-            node_coupling = AdditiveAdjCoupling
-            print("Additive Transformations")
+        # Additive couplings only, as in the official QM9/ZINC runs (--additive_transformations).
+        # The affine path is not used: AffineAdjCoupling.forward in this port returns adj unchanged.
+        channel_coupling = AdditiveNodeFeatureCoupling
+        node_coupling = AdditiveAdjCoupling
         transforms = []
         # num_coupling['channel'] = X-couplings (applied first), num_coupling['node'] = A-couplings
         for i in range(self.num_coupling['channel']):
@@ -130,7 +126,6 @@ class GraphNvpModel(nn.Module):
         self.masks = hyperparams.masks
 
         self.apply_batch_norm = args.apply_batch_norm
-        self.additive_transformations = args.additive_transformations
 
         self.num_masks = hyperparams.num_masks
         self.num_coupling = hyperparams.num_coupling

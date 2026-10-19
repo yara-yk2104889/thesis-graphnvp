@@ -76,7 +76,7 @@ def main():
     NVPmodel_params = Hyperparameters(args.num_atoms, args.num_rels, len(args.atomic_num_list),
                                    num_masks=num_masks, mask_size=mask_size, num_coupling=num_coupling,
                                    batch_norm=args.apply_batch_norm,
-                                   additive_transformations=args.additive_transformations,
+                                   additive_transformations=True,  # the model always uses additive couplings
                                    mlp_channels=mlp_channels,
                                    gnn_channels=gnn_channels)
     model = GraphNvpModel(NVPmodel_params).to(args.device)

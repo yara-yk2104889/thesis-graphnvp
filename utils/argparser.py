@@ -31,13 +31,13 @@ def get_parser():
                                                                       'coupling layer')
     parser.add_argument('--channel_mask_size', type=int, default=-1, help='Number of cells to be masked in the Channel '
                                                                           'coupling layer')
-    parser.add_argument('--apply_batch_norm', type=bool, default=False, help='Whether batch '
-                                                                             'normalization should be performed')
-    parser.add_argument('--additive_transformations', type=bool, default=True,
-                        help='if True, apply only addictive coupling layers; else, apply affine coupling layers')
+    # On/off flags use store_true: with type=bool any value, even "False", turned them on.
+    # There is no --additive_transformations flag: the model always uses additive couplings (see nvp_model.py).
+    parser.add_argument('--apply_batch_norm', action='store_true', help='Whether batch '
+                                                                        'normalization should be performed')
     # Model configuration.
     parser.add_argument('--temp', type=float, default=0.7, help='the tempearture of mcmc steps')
-    parser.add_argument('--use_switch', type=bool, default=False, help='use switch activation for R-GCN')
+    parser.add_argument('--use_switch', action='store_true', help='use switch activation for R-GCN')
     parser.add_argument('--num_gcn_layer', type=int, default=3)
     parser.add_argument('--show_loss_step', type=int, default=10, help='show loss every n step/epoch')
 
@@ -52,7 +52,7 @@ def get_parser():
     parser.add_argument('--beta1', type=float, default=0.9, help='beta1 for Adam optimizer')
     parser.add_argument('--beta2', type=float, default=0.999, help='beta2 for Adam optimizer')
     parser.add_argument('--resume_epoch', type=int, default=0, help='resume training after this epoch')
-    parser.add_argument('--resume', type=bool, default=False, help='resume training')
+    parser.add_argument('--resume', action='store_true', help='resume training')
 
     # Generation args
     parser.add_argument('--min_atoms', type=int, default=2, help='Minimum number of atoms in a generated molecule')

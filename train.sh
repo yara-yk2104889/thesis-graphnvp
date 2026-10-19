@@ -10,8 +10,7 @@ CUDA_VISIBLE_DEVICES=1 python train_mle.py --batch_size 256 \
     --num_channel_masks 9 \
     --num_node_coupling 36 \
     --num_channel_coupling 27 \
-    --additive_transformations True \
-    --apply_batch_norm True \
+    --apply_batch_norm \
     --node_mask_size 15 \
     --mode train \
     --num_gen 100 \
