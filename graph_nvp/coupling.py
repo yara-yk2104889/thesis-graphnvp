@@ -11,6 +11,11 @@ def create_inv_masks(masks):
     inversed_masks[inversed_masks == 2] = 0
     return inversed_masks
 
+def near_zero_init(linear):
+    # As the official initialW=1e-10 (bias 0): each coupling starts close to the identity
+    nn.init.constant_(linear.weight, 1e-10)
+    nn.init.zeros_(linear.bias)
+
 class Rescale(nn.Module):
     def __init__(self):
         super(Rescale, self).__init__()
@@ -62,6 +67,7 @@ class AffineAdjCoupling(Coupling):
 
         self.mlp = MLP(ch_list, in_size=self.in_size)
         self.lin = nn.Linear(ch_list[-1], 2 * self.out_size)
+        near_zero_init(self.lin)
         self.scale_factor = torch.zeros(1, device=args.device)
         self.batch_norm = nn.BatchNorm1d(self.in_size)
         self.tanh = nn.Tanh()
@@ -113,6 +119,7 @@ class AffineNodeFeatureCoupling(Coupling):
                          edge_dim=self.num_bonds, dropout=0.).to(args.device)
         self.lin1 = nn.Linear(ch_list['hidden'][0], out_features=ch_list['hidden'][1])
         self.lin2 = nn.Linear(ch_list['hidden'][1], out_features=2*self.out_size)
+        near_zero_init(self.lin2)
         self.scale_factor = torch.zeros(1, device=args.device)
         self.batch_norm = nn.BatchNorm1d(ch_list['hidden'][0])
         self.tanh = nn.Tanh()
@@ -166,6 +173,7 @@ class AdditiveAdjCoupling(Coupling):
         self.in_size = self.adj_size - self.out_size
         self.mlp = MLP(ch_list, in_size=self.in_size)
         self.lin = nn.Linear(ch_list[-1], out_features=self.out_size)
+        near_zero_init(self.lin)
         self.batch_norm = nn.BatchNorm1d(self.in_size)
         self.scale_factor = torch.zeros(1, device=args.device)
         self.tanh = nn.Tanh()
@@ -211,6 +219,7 @@ class AdditiveNodeFeatureCoupling(Coupling):
                          edge_dim=self.num_bonds, dropout=0.).to(args.device)
         self.lin1 = nn.Linear(ch_list['hidden'][0], out_features=ch_list['hidden'][1])
         self.lin2 = nn.Linear(ch_list['hidden'][1], out_features=self.out_size)
+        near_zero_init(self.lin2)
         self.scale_factor = torch.zeros(1, device=args.device)
         self.batch_norm = nn.BatchNorm1d(ch_list['hidden'][0])
         self.tanh = nn.Tanh()
