@@ -93,11 +93,21 @@ def main():
     bond_dim = model.num_bonds  # 4 for QM9
     best_g_loss, best_d_loss = sys.maxsize, sys.maxsize
     start_epoch = args.resume_epoch
+    resume_optimizer_state = None
     if args.resume:
         model = GraphNvpModel(hyperparams=NVPmodel_params).to(args.device)
         model_path = joinpath(args.model_save_dir, 'epoch{}-mle.ckpt'.format(args.resume_epoch))
-        model.load_state_dict(torch.load(model_path, map_location=lambda storage, loc: storage))
-        print("Resuming from epoch{}".format(args.resume_epoch))
+        checkpoint = torch.load(model_path, map_location='cpu')
+        if 'model' in checkpoint and 'optimizer' in checkpoint:
+            # Full checkpoint: model weights, Adam's state and the epoch number
+            model.load_state_dict(checkpoint['model'])
+            resume_optimizer_state = checkpoint['optimizer']
+            start_epoch = checkpoint['epoch']
+        else:
+            # Older checkpoint that holds only the model weights
+            model.load_state_dict(checkpoint)
+            print("Warning: {} has no optimizer state; Adam's state starts fresh".format(model_path))
+        print("Resuming from epoch{}".format(start_epoch))
 
     all_unique_rate = []
     all_valid_rate = []
@@ -106,6 +116,8 @@ def main():
 
     # Plain Adam with a constant learning rate, as in the official code (no LR schedule)
     optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), args.mle_lr, betas=(args.beta1, args.beta2))
+    if resume_optimizer_state is not None:
+        optimizer.load_state_dict(resume_optimizer_state)
     optimizer.step()
 
     def generate_one(model, mute=False, cnt=None):
@@ -187,7 +199,8 @@ def main():
 
             print("Saving GraphNVP model trained with maximum liklihood")
             model_path = joinpath(args.model_save_dir, 'epoch{}-mle.ckpt'.format(epoch))
-            torch.save(model.state_dict(), model_path)
+            torch.save({'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch},
+                       model_path)
             print('Saved model checkpoints into {}...'.format(args.model_save_dir))
             gen(model, epoch)
 
