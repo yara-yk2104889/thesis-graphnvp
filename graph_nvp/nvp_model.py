@@ -74,7 +74,10 @@ class GraphNvpModel(nn.Module):
         for i in range(self.num_coupling['channel']):
             h, log_det_jacobians = self.transforms[i](h, adj)
             sum_log_det_jacs_x = sum_log_det_jacs_x + log_det_jacobians 
-        #adj = adj + 0.9 * torch.rand(adj.shape, device=args.device)
+        # As in the official code, dequantize A only after the X-couplings (which see the
+        # clean one-hot A) and only while training
+        if self.training:
+            adj = adj + 0.9 * torch.rand(adj.shape, device=adj.device)
         for i in range(self.num_coupling['channel'], len(self.transforms)):
             adj, log_det_jacobians = self.transforms[i](adj)
             sum_log_det_jacs_adj = sum_log_det_jacs_adj + log_det_jacobians 
@@ -107,6 +110,9 @@ class GraphNvpModel(nn.Module):
             adj = adj + adj.permute(0, 1, 3, 2)
             adj = adj / 2.0
             adj = F.softmax(adj, dim=1)
+            # Discretize to one-hot before decoding X, as the official floor(A / max_bond)
+            max_bond = adj.max(dim=1, keepdim=True).values
+            adj = torch.floor(adj / max_bond)
         else:
             adj = true_adj
 

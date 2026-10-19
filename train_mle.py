@@ -172,10 +172,9 @@ def main():
                 X, A, label = X.float().to(args.device), \
                               A.float().to(args.device), \
                               label.float().to(args.device)
-                # Dequantization
+                # Dequantization of X; A is dequantized inside the model, after the X-couplings
                 X_prime = X + 0.9 * torch.rand(X.shape, device=args.device)
-                A_prime = A + 0.9 * torch.rand(A.shape, device=args.device)
-                z, sum_log_det_jacs = model(A_prime, X_prime)
+                z, sum_log_det_jacs = model(A, X_prime)
                 nll = model.log_prob(z, sum_log_det_jacs)
                 g_loss = nll
                 loss['G/loss_g'] = g_loss.item()
