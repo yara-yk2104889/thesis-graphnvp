@@ -38,8 +38,6 @@ class RelationGraphConvolution(nn.Module):
         else:
             self.act = None
 
-        self.weight = nn.Parameter(torch.FloatTensor(
-            self.edge_dim, self.in_features, self.out_features))
         if bias:
             self.bias = nn.Parameter(torch.FloatTensor(
                 self.edge_dim, 1, self.out_features))
@@ -50,7 +48,6 @@ class RelationGraphConvolution(nn.Module):
         self.graph_linear_edge = GraphLinear(in_features, out_features * edge_dim)
 
     def reset_parameters(self):
-        nn.init.xavier_uniform_(self.weight)
         if self.bias is not None:
             nn.init.constant_(self.bias, 0.)
 

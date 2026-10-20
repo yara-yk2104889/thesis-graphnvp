@@ -55,7 +55,7 @@ def main():
         transform_fn = transform_fn_zinc250k
         args.atomic_num_list = [6, 7, 8, 9, 15, 16, 17, 35, 53, 0]
         mlp_channels = [1024, 512]
-        gnn_channels = {'gcn': [16, 128], 'hidden': [64, 256]}
+        gnn_channels = {'gcn': [16, 128], 'hidden': [256, 64]}  # official ZINC sizes
         valid_idx = transform_zinc250k.get_val_ids()
 
     dataset = NumpyTupleDataset(joinpath(args.data_dir, args.data_file), transform_fn)

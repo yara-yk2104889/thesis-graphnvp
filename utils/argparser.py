@@ -40,7 +40,6 @@ def get_parser():
     # Model configuration.
     parser.add_argument('--temp', type=float, default=0.7, help='the tempearture of mcmc steps')
     parser.add_argument('--use_switch', action='store_true', help='use switch activation for R-GCN')
-    parser.add_argument('--num_gcn_layer', type=int, default=3)
     parser.add_argument('--show_loss_step', type=int, default=10, help='show loss every n step/epoch')
 
     # Training configuration
