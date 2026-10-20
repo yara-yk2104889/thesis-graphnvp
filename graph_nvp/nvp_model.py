@@ -125,7 +125,8 @@ class GraphNvpModel(nn.Module):
         self.num_features = hyperparams.num_features
         self.masks = hyperparams.masks
 
-        self.apply_batch_norm = args.apply_batch_norm
+        # From the hyperparameters (not the command line), so a loaded checkpoint keeps its setting
+        self.apply_batch_norm = hyperparams.apply_batch_norm
 
         self.num_masks = hyperparams.num_masks
         self.num_coupling = hyperparams.num_coupling

@@ -243,7 +243,9 @@ def main():
                 print("Saving GraphNVP model trained with maximum liklihood")
                 os.makedirs(args.model_save_dir, exist_ok=True)
                 model_path = joinpath(args.model_save_dir, 'epoch{}-mle.ckpt'.format(epoch))
-                torch.save({'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch},
+                # hyperparams and train_args let evaluate.py rebuild exactly this model
+                torch.save({'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch,
+                            'hyperparams': vars(NVPmodel_params), 'train_args': vars(args)},
                            model_path)
                 print('Saved model checkpoints into {}...'.format(args.model_save_dir))
             gen(model, epoch)
