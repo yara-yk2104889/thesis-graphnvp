@@ -51,6 +51,7 @@ The metrics are defined as follows:
 - **Canonicalization:** generated and training molecules are both rebuilt from their tensors with the same `construct_mol`, and both are canonicalized with the same RDKit round trip (`MolFromSmiles(MolToSmiles(mol))`, then non-isomeric canonical SMILES). Check: real training molecules evaluated as if generated are 100% found in the training set, apart from 1-atom molecules, which count as invalid by definition.
 - **Output:** a JSON file with all counts and rates, the checkpoint path, n, temperature, seed and git commit, plus a text file listing every sample's SMILES and status.
 - **Cache:** the canonical training SMILES are cached in `data/cache/`, keyed on the `.npz` content, the training indices and the atom list (commit `TBD-2`). Cached and recomputed results are identical.
+- **Temperature sweep:** `sweep_temperature.py` runs `evaluate.py` on one checkpoint at temperatures 0.6, 0.7, 0.8, 0.85, 0.9 and 1.0 and writes one combined CSV (commit `TBD-3`). All temperatures use the same seed, so they scale the same latent samples.
 
 ## 4. Checked and found identical (not changed)
 
