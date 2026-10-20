@@ -16,8 +16,11 @@ the official generate.py reports it). Generated and training molecules are built
 tensors with the same construct_mol and canonicalized with the same function.
 
 Writes <out_dir>/eval_<checkpoint>_n<n>_t<temp>_s<seed>.json and ..._smiles.txt.
+The canonical training SMILES are cached in data/cache/ (keyed on the .npz content and the split),
+so only the first evaluation for a dataset spends minutes on them.
 """
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -33,6 +36,10 @@ parser.add_argument('--seed', type=int, default=0, help='random seed for samplin
 parser.add_argument('--batch_size', type=int, default=1000, help='molecules decoded per batch')
 parser.add_argument('--out_dir', type=str, default=None, help='output folder (default: the checkpoint folder)')
 parser.add_argument('--device', type=str, default=None, help='cpu or cuda (default: cuda if available)')
+parser.add_argument('--cache_dir', type=str, default=os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                                  'data', 'cache'),
+                    help='where the canonical training SMILES are cached')
+parser.add_argument('--no_cache', action='store_true', help='recompute the training SMILES, do not read or write the cache')
 eval_args = parser.parse_args()
 
 # The model code reads utils.argparser.args, which parses sys.argv on import: give it the defaults
@@ -49,6 +56,7 @@ from utils.data_utils import NumpyTupleDataset, construct_mol
 
 RDLogger.DisableLog('rdApp.*')  # RDKit errors for invalid samples are expected; they are counted instead
 REPO = os.path.dirname(os.path.abspath(__file__))
+CACHE_VERSION = 1  # bump when construct_mol or canonical_smiles change, so old caches are not reused
 
 
 def load_model(path, device):
@@ -89,8 +97,20 @@ def classify(mol):
     return ('valid_disconnected' if '.' in smiles else 'valid'), smiles
 
 
-def training_split_smiles(train_args, atomic_num_list):
-    """Canonical SMILES of the training split used by train_mle.py (same split and --subset)"""
+def file_sha256(path):
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 24), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def training_split_smiles(train_args, atomic_num_list, cache_dir=None):
+    """
+    Canonical SMILES of the training split used by train_mle.py (same split and --subset).
+    Cached in cache_dir, keyed on the .npz content, the training indices and the atom list.
+    Returns (smiles set, number of training molecules, number not rebuildable, cache file or None, cache hit)
+    """
     data_name = train_args['data_name']
     if data_name == 'qm9':
         from data import transform_qm9
@@ -98,17 +118,32 @@ def training_split_smiles(train_args, atomic_num_list):
     else:
         from data import transform_zinc250k
         transform_fn, valid_idx = transform_zinc250k.transform_fn_zinc250k, transform_zinc250k.get_val_ids()
-    dataset = NumpyTupleDataset(joinpath(train_args['data_dir'], train_args['data_file']), transform_fn)
+    npz_path = joinpath(train_args['data_dir'], train_args['data_file'])
+    with np.load(npz_path) as f:
+        n_molecules = len(f['arr_0'])
     if len(valid_idx) > 0:
         valid_set = set(valid_idx)
-        train_idx = [t for t in range(len(dataset)) if t not in valid_set]
+        train_idx = [t for t in range(n_molecules) if t not in valid_set]
     else:
-        order = np.random.RandomState(train_args['seed']).permutation(len(dataset))
-        train_idx = list(order[:int(len(dataset) * 0.8)])
+        order = np.random.RandomState(train_args['seed']).permutation(n_molecules)
+        train_idx = [int(t) for t in order[:int(n_molecules * 0.8)]]
     if train_args.get('subset', 0) > 0:
         train_idx = train_idx[:train_args['subset']]
-    train = Subset(dataset, train_idx)
 
+    cache_path = None
+    if cache_dir is not None:
+        key = hashlib.sha256(json.dumps({'version': CACHE_VERSION, 'npz_sha256': file_sha256(npz_path),
+                                         'train_idx': train_idx, 'atomic_num_list': atomic_num_list}
+                                        ).encode()).hexdigest()
+        cache_path = joinpath(cache_dir, 'train_smiles_{}_{}.json'.format(data_name, key[:16]))
+        if os.path.exists(cache_path):
+            with open(cache_path) as f:
+                cached = json.load(f)
+            if cached['key'] == key:
+                return set(cached['smiles']), cached['n_train'], cached['not_rebuilt'], cache_path, True
+
+    print('canonicalizing the training split...')
+    train = Subset(NumpyTupleDataset(npz_path, transform_fn), train_idx)
     smiles, not_rebuilt = set(), 0
     for X, A, _ in train:
         s = canonical_smiles(construct_mol(torch.as_tensor(X), torch.as_tensor(A), atomic_num_list))
@@ -116,7 +151,15 @@ def training_split_smiles(train_args, atomic_num_list):
             not_rebuilt += 1
         else:
             smiles.add(s)
-    return smiles, len(train_idx), not_rebuilt
+
+    if cache_path is not None:
+        os.makedirs(cache_dir, exist_ok=True)
+        tmp = cache_path + '.tmp'
+        with open(tmp, 'w') as f:
+            json.dump({'key': key, 'npz': os.path.abspath(npz_path), 'n_train': len(train_idx),
+                       'not_rebuilt': not_rebuilt, 'smiles': sorted(smiles)}, f)
+        os.replace(tmp, cache_path)  # atomic: a half-written cache is never read
+    return smiles, len(train_idx), not_rebuilt, cache_path, False
 
 
 def rates(smiles_list, train_smiles, n_samples):
@@ -168,8 +211,11 @@ def main():
                 smiles.append(s if s is not None else Chem.MolToSmiles(mol))
             print('sampled {}/{}'.format(start + batch, eval_args.n))
 
-    print('canonicalizing the training split...')
-    train_smiles, train_size, not_rebuilt = training_split_smiles(train_args, atomic_num_list)
+    cache_dir = None if eval_args.no_cache else eval_args.cache_dir
+    train_smiles, train_size, not_rebuilt, cache_path, cache_hit = training_split_smiles(
+        train_args, atomic_num_list, cache_dir)
+    if cache_hit:
+        print('training SMILES loaded from cache', cache_path)
 
     valid_smiles = [s for s, st in zip(smiles, statuses) if st in ('valid', 'valid_disconnected')]
     connected_smiles = [s for s, st in zip(smiles, statuses) if st == 'valid']
@@ -184,7 +230,8 @@ def main():
         'valid': rates(valid_smiles, train_smiles, eval_args.n),
         'valid_connected': rates(connected_smiles, train_smiles, eval_args.n),
         'training_split': {'molecules': train_size, 'unique_canonical_smiles': len(train_smiles),
-                           'could_not_be_rebuilt': not_rebuilt},
+                           'could_not_be_rebuilt': not_rebuilt, 'cache_file': cache_path,
+                           'from_cache': cache_hit},
     }
 
     out_dir = eval_args.out_dir or os.path.dirname(os.path.abspath(eval_args.checkpoint))

@@ -1,6 +1,9 @@
 # Large preprocessed datasets (created by data/download_data.py)
 *.npz
 
+# Cached canonical training SMILES (evaluate.py)
+data/cache/
+
 # Checkpoints
 *.ckpt
 saved_models/

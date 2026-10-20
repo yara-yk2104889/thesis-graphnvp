@@ -54,7 +54,7 @@ class SmokeTest(unittest.TestCase):
 
             n = 200
             run('evaluate.py', '--checkpoint', checkpoint_path, '--n', str(n), '--batch_size', '100',
-                '--device', 'cpu')
+                '--device', 'cpu', '--cache_dir', os.path.join(tmp, 'cache'))
             name = os.path.join(tmp, 'eval_epoch1-mle_n{}_t0.8_s0'.format(n))
             with open(name + '.json') as f:
                 results = json.load(f)
