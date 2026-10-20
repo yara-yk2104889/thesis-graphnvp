@@ -177,6 +177,8 @@ def rates(smiles_list, train_smiles, n_samples):
 
 
 def git_state():
+    """(commit, uncommitted changes). Without git (a copy made by make_archive.sh), the commit
+    comes from its COMMIT file and uncommitted changes are unknown (None)."""
     try:
         commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=REPO, capture_output=True,
                                 text=True, check=True).stdout.strip()
@@ -184,6 +186,10 @@ def git_state():
                                capture_output=True, text=True, check=True).stdout.strip() != ''
         return commit, dirty
     except (OSError, subprocess.CalledProcessError):
+        commit_file = joinpath(REPO, 'COMMIT')
+        if os.path.exists(commit_file):
+            with open(commit_file) as f:
+                return f.read().strip(), None
         return None, None
 
 
