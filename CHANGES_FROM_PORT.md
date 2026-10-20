@@ -19,7 +19,7 @@ Each change is its own git commit (hash in the last column).
 | 8 | `train_mle.py`, `utils/data_utils.py` | Chainer data pipeline replaced by a PyTorch `Dataset` + `DataLoader(shuffle=True)`; same `.npz` file and the same train/validation split | The port replayed the same batch order every epoch; the official iterator reshuffles. Also removes the Chainer dependency | `7c38ef3` |
 | 9 | `train_mle.py` | Resume runs epochs `resume_epoch + 1 … epochs` | The port's `range(1 + start, epochs + 1 − start)` skipped epochs, or trained none at all when resuming at or after the halfway point | `c915463` |
 | 10 | `train.sh`, `train_mle.py`, `utils/argparser.py` | 60 epochs, checkpoint every 10 (new `--save_epochs`, last epoch always saved) | Official `scripts/train_qm9.sh` (`-x 60 --save_epochs 10`); the port's script trained 10 epochs | `b197541` |
-| 11 | `train_mle.py` | ZINC hidden sizes [256, 64] | Official `train_model.py`; the port had them reversed, [64, 256]. Only affects ZINC runs | `TBD-1` |
+| 11 | `train_mle.py` | ZINC hidden sizes [256, 64] | Official `train_model.py`; the port had them reversed, [64, 256]. Only affects ZINC runs | `cb5b368` |
 
 ## 2. Training infrastructure: no effect on the model or the optimization
 
@@ -30,7 +30,9 @@ Each change is its own git commit (hash in the last column).
 | `train_mle.py` | Per epoch, `losses.csv` in the checkpoint folder: mean training loss, and validation NLL (same loss, eval mode, no dequantization noise, no gradients) | `cd9bd01` |
 | `train_mle.py`, `utils/argparser.py` | `--subset n` for quick tests (first n training / n//10 validation molecules; default: all) | `ec6d95b` |
 | `utils/sascorer.py` | `rdkit.six` (removed from RDKit) replaced by `dict.items()` | `8bc5f6e` |
-| `graph_nvp/rgcn.py`, `utils/argparser.py` | Removed the unused `self.weight` parameter of `RelationGraphConvolution` and the unused `--num_gcn_layer` flag. The model's outputs don't depend on them; the QM9 parameter count drops from 6,201,127 to 6,145,831, and for a given seed the random initial weights differ (one tensor fewer is initialized) | `TBD-1` |
+| `requirements.txt` | Pinned, tested versions: Python 3.12, torch 2.14.1, numpy 2.5.4, RDKit 2026.09.1 (cite these in the thesis) | `0fa3053` |
+| `make_archive.sh`, `evaluate.py` | Zip of a commit for machines without GitHub; it includes a `COMMIT` file, which `evaluate.py` records when there is no `.git` | `2f3fc03`, `9312b2e` |
+| `graph_nvp/rgcn.py`, `utils/argparser.py` | Removed the unused `self.weight` parameter of `RelationGraphConvolution` and the unused `--num_gcn_layer` flag. The model's outputs don't depend on them; the QM9 parameter count drops from 6,201,127 to 6,145,831, and for a given seed the random initial weights differ (one tensor fewer is initialized) | `cb5b368` |
 
 ## 3. Evaluation (`evaluate.py`, commit `2277aa3`)
 
@@ -50,8 +52,8 @@ The metrics are defined as follows:
 - **Novelty:** valid molecules not in the **training split** (validation excluded) / valid. Also reported over unique molecules (`novelty_unique`), the way the official `generate.py` computes it.
 - **Canonicalization:** generated and training molecules are both rebuilt from their tensors with the same `construct_mol`, and both are canonicalized with the same RDKit round trip (`MolFromSmiles(MolToSmiles(mol))`, then non-isomeric canonical SMILES). Check: real training molecules evaluated as if generated are 100% found in the training set, apart from 1-atom molecules, which count as invalid by definition.
 - **Output:** a JSON file with all counts and rates, the checkpoint path, n, temperature, seed and git commit, plus a text file listing every sample's SMILES and status.
-- **Cache:** the canonical training SMILES are cached in `data/cache/`, keyed on the `.npz` content, the training indices and the atom list (commit `TBD-2`). Cached and recomputed results are identical.
-- **Temperature sweep:** `sweep_temperature.py` runs `evaluate.py` on one checkpoint at temperatures 0.6, 0.7, 0.8, 0.85, 0.9 and 1.0 and writes one combined CSV (commit `TBD-3`). All temperatures use the same seed, so they scale the same latent samples.
+- **Cache:** the canonical training SMILES are cached in `data/cache/`, keyed on the `.npz` content, the training indices and the atom list (commit `b5061da`). Cached and recomputed results are identical.
+- **Temperature sweep:** `sweep_temperature.py` runs `evaluate.py` on one checkpoint at temperatures 0.6, 0.7, 0.8, 0.85, 0.9 and 1.0 and writes one combined CSV (commit `f41b2fa`). All temperatures use the same seed, so they scale the same latent samples.
 
 ## 4. Checked and found identical (not changed)
 
