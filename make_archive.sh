@@ -18,6 +18,6 @@ name="thesis-graphnvp-$(git rev-parse --short HEAD)"
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
     echo "Warning: there are uncommitted changes; they are NOT in the zip" >&2
 fi
-# --add-virtual-file is placed after --prefix, so COMMIT lands in $name/COMMIT
-git archive --format=zip --prefix="$name/" --add-virtual-file="COMMIT:$full" -o "$name.zip" HEAD
+# --prefix does not apply to --add-virtual-file, so COMMIT gets the folder name explicitly
+git archive --format=zip --prefix="$name/" --add-virtual-file="$name/COMMIT:$full" -o "$name.zip" HEAD
 echo "wrote $name.zip (commit $full)"
