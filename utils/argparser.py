@@ -11,6 +11,8 @@ def get_parser():
     parser.add_argument('--save_dir', type=str, default='./results',
                         help='Location for parameter checkpoints and samples')
     parser.add_argument('--epochs', type=int, default=20, help='Num of epochs to run in total')
+    parser.add_argument('--subset', type=int, default=0,
+                        help='for quick tests: use only the first n training and n // 10 validation molecules (0 = all)')
     parser.add_argument('--device', type=str, default='cuda', help='cpu or cuda')
     # reproducibility
     parser.add_argument('--seed', type=int, default=1, help='Random seed to use')

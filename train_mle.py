@@ -69,6 +69,10 @@ def main():
         order = np.random.RandomState(args.seed).permutation(len(dataset))
         n_train = int(len(dataset) * 0.8)
         train, test = Subset(dataset, order[:n_train]), Subset(dataset, order[n_train:])
+    if args.subset > 0:
+        train = Subset(train, range(min(args.subset, len(train))))
+        test = Subset(test, range(min(max(1, args.subset // 10), len(test))))
+        print('Using a subset: {} training, {} validation molecules'.format(len(train), len(test)))
 
     num_masks = {'node': args.num_node_masks, 'channel': args.num_channel_masks}
     mask_size = {'node': args.node_mask_size, 'channel': args.channel_mask_size}
