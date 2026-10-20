@@ -51,6 +51,8 @@ def get_parser():
     # Official GraphNVP uses chainer's default Adam (beta1 0.9, beta2 0.999)
     parser.add_argument('--beta1', type=float, default=0.9, help='beta1 for Adam optimizer')
     parser.add_argument('--beta2', type=float, default=0.999, help='beta2 for Adam optimizer')
+    parser.add_argument('--save_epochs', type=int, default=1,
+                        help='save a checkpoint every n epochs (the last epoch is always saved)')
     parser.add_argument('--resume_epoch', type=int, default=0, help='resume training after this epoch')
     parser.add_argument('--resume', action='store_true', help='resume training')
 

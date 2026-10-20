@@ -197,11 +197,13 @@ def main():
                     tqdm.write("Epoch %d, batch %d, Loss mle: %.5f" % (epoch, i_batch, g_loss.item()))
             pbar.close()
 
-            print("Saving GraphNVP model trained with maximum liklihood")
-            model_path = joinpath(args.model_save_dir, 'epoch{}-mle.ckpt'.format(epoch))
-            torch.save({'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch},
-                       model_path)
-            print('Saved model checkpoints into {}...'.format(args.model_save_dir))
+            if epoch % args.save_epochs == 0 or epoch == args.epochs:
+                print("Saving GraphNVP model trained with maximum liklihood")
+                os.makedirs(args.model_save_dir, exist_ok=True)
+                model_path = joinpath(args.model_save_dir, 'epoch{}-mle.ckpt'.format(epoch))
+                torch.save({'model': model.state_dict(), 'optimizer': optimizer.state_dict(), 'epoch': epoch},
+                           model_path)
+                print('Saved model checkpoints into {}...'.format(args.model_save_dir))
             gen(model, epoch)
 
     def gen(model, epoch=-1):
