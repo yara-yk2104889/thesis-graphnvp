@@ -1,5 +1,18 @@
 # Large preprocessed datasets (created by data/download_data.py)
-data/*.npz
+*.npz
+
+# Checkpoints
+*.ckpt
+saved_models/
+saved_qm9_models/
+
+# Results, generated molecules and logs
+results/
+samples/
+logs/
+
+# Python
+__pycache__/
 
 # Local Python environment
 .venv/
