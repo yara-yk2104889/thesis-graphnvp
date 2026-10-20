@@ -86,6 +86,7 @@ def main():
     model = GraphNvpModel(NVPmodel_params).to(args.device)
     # shuffle=True draws a new order every epoch (seeded by torch.manual_seed)
     dataloader = DataLoader(train, batch_size=args.batch_size, shuffle=True)
+    valid_loader = DataLoader(test, batch_size=args.batch_size, shuffle=False)
     data_config, all_train_smiles = read_molecules(args.data_dir)
 
     # fitting
@@ -168,7 +169,38 @@ def main():
                     cnt, smiles, num_atoms, num_bonds, total_resample, time() - generate_start_t))
         return smiles, A, X, pure_valid, num_atoms
 
+    def validation_nll(model):
+        """
+        Same loss as in training, on the clean validation molecules: eval mode (no A noise,
+        BatchNorm running statistics), no X noise, no gradients
+        """
+        model.eval()
+        total, count = 0., 0
+        with torch.no_grad():
+            for X, A, label in valid_loader:
+                X, A = X.float().to(args.device), A.float().to(args.device)
+                z, sum_log_det_jacs = model(A, X)
+                # log_prob averages over the batch; weight by batch size for the mean over all molecules
+                total += model.log_prob(z, sum_log_det_jacs).item() * X.shape[0]
+                count += X.shape[0]
+        return total / count
+
+    loss_csv = joinpath(args.model_save_dir, 'losses.csv')
+
+    def start_loss_csv():
+        # Keep rows up to the epoch we resume from, so a resumed run does not duplicate epochs
+        rows = []
+        if start_epoch > 0 and os.path.exists(loss_csv):
+            with open(loss_csv) as f:
+                rows = [line for line in f.read().splitlines()[1:] if int(line.split(',')[0]) <= start_epoch]
+        os.makedirs(args.model_save_dir, exist_ok=True)
+        with open(loss_csv, 'w') as f:
+            f.write('epoch,train_loss,valid_nll\n')
+            for line in rows:
+                f.write(line + '\n')
+
     def train(model):
+        start_loss_csv()
         # Continue from the epoch after the checkpoint up to --epochs (inclusive)
         for epoch in range(start_epoch + 1, args.epochs + 1):
             # gen() at the end of each epoch calls model.eval(); switch back so BatchNorm trains
@@ -200,6 +232,12 @@ def main():
                 if i_batch % args.show_loss_step == 0:
                     tqdm.write("Epoch %d, batch %d, Loss mle: %.5f" % (epoch, i_batch, g_loss.item()))
             pbar.close()
+
+            train_loss = float(np.mean(batch_g_losses))
+            valid_nll = validation_nll(model)
+            print('Epoch %d | train loss %.5f | validation NLL %.5f' % (epoch, train_loss, valid_nll))
+            with open(loss_csv, 'a') as f:
+                f.write('%d,%.6f,%.6f\n' % (epoch, train_loss, valid_nll))
 
             if epoch % args.save_epochs == 0 or epoch == args.epochs:
                 print("Saving GraphNVP model trained with maximum liklihood")
