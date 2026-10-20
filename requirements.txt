@@ -1,0 +1,22 @@
+# Packages for training and evaluation (train_mle.py, evaluate.py, sweep_temperature.py, tests).
+# Versions as tested (Python 3.12). Install with:  pip install -r requirements.txt
+#
+# Requirements of these versions on Linux:
+# - Python >= 3.12 (numpy 2.5.4 needs it).
+# - glibc >= 2.28 (the torch, rdkit and numpy wheels are manylinux_2_28; check with: ldd --version).
+# - GPU: the Linux torch wheel from PyPI includes CUDA 13 libraries, so the NVIDIA driver must
+#   support CUDA 13 ("CUDA Version" at the top right of nvidia-smi must be 13.x or higher).
+#   If it is older, first install torch==2.14.1 from the matching index listed at
+#   https://pytorch.org/get-started/previous-versions/ and then run this file.
+# Check after installing:  python -c "import torch; print(torch.cuda.is_available())"
+#
+# Not needed: chainer / chainer-chemistry (only for data/download_data.py, which created the .npz).
+
+torch==2.14.1
+numpy==2.5.4
+rdkit==2026.9.1
+tqdm==4.70.1
+networkx==3.6.1
+tabulate==0.10.0
+# utils/argparser.py imports distutils, which Python 3.12 only provides through setuptools
+setuptools==78.1.0
