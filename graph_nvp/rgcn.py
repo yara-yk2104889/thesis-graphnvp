@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from utils.argparser import args
+from graph_nvp.mlp import lecun_linear
 
 def Linear(in_features, out_features, bias=True):
     m = nn.Linear(in_features, out_features, bias)
@@ -112,9 +113,9 @@ class GraphAggregation(nn.Module):
     def __init__(self, in_features=128, out_features=64, b_dim=4, dropout=0.):
         super(GraphAggregation, self).__init__() #+b_dim
         # no bias on the readout, as in the official RelGCNReadout (nobias=True)
-        self.sigmoid_linear = nn.Sequential(nn.Linear(in_features, out_features, bias=False),
+        self.sigmoid_linear = nn.Sequential(lecun_linear(in_features, out_features, bias=False),
                                             nn.Sigmoid())  #+b_dim
-        self.tanh_linear = nn.Sequential(nn.Linear(in_features, out_features, bias=False),
+        self.tanh_linear = nn.Sequential(lecun_linear(in_features, out_features, bias=False),
                                          nn.Tanh())
         self.dropout = nn.Dropout(dropout)
         self.switch = Switch()
@@ -143,7 +144,7 @@ class GraphLinear(nn.Module):
     def __init__(self, *argv, **kwargs):
         super(GraphLinear, self).__init__()
         #self.linear = spectral_norm(nn.Linear(*argv, **kwargs))
-        self.linear = nn.Linear(*argv, **kwargs)
+        self.linear = lecun_linear(*argv, **kwargs)
 
     def __call__(self, x):
         """Forward propagation.

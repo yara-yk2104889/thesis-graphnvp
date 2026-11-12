@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from graph_nvp.mlp import MLP
+from graph_nvp.mlp import MLP, lecun_linear
 from graph_nvp.rgcn import RGCN
 from utils.argparser import args
 
@@ -66,7 +66,7 @@ class AffineAdjCoupling(Coupling):
         self.in_size = self.adj_size - self.out_size
 
         self.mlp = MLP(ch_list, in_size=self.in_size)
-        self.lin = nn.Linear(ch_list[-1], 2 * self.out_size)
+        self.lin = lecun_linear(ch_list[-1], 2 * self.out_size)
         near_zero_init(self.lin)
         self.scale_factor = torch.zeros(1, device=args.device)
         self.batch_norm = nn.BatchNorm1d(self.in_size)
@@ -117,8 +117,8 @@ class AffineNodeFeatureCoupling(Coupling):
         self.out_size = num_features * num_masked_cols
         self.rgcn = RGCN(num_features, ch_list['gcn'], out_channels=ch_list['hidden'][0],
                          edge_dim=self.num_bonds, dropout=0.).to(args.device)
-        self.lin1 = nn.Linear(ch_list['hidden'][0], out_features=ch_list['hidden'][1])
-        self.lin2 = nn.Linear(ch_list['hidden'][1], out_features=2*self.out_size)
+        self.lin1 = lecun_linear(ch_list['hidden'][0], out_features=ch_list['hidden'][1])
+        self.lin2 = lecun_linear(ch_list['hidden'][1], out_features=2*self.out_size)
         near_zero_init(self.lin2)
         self.scale_factor = torch.zeros(1, device=args.device)
         self.batch_norm = nn.BatchNorm1d(ch_list['hidden'][0])
@@ -172,7 +172,7 @@ class AdditiveAdjCoupling(Coupling):
         self.out_size = num_nodes * num_relations
         self.in_size = self.adj_size - self.out_size
         self.mlp = MLP(ch_list, in_size=self.in_size)
-        self.lin = nn.Linear(ch_list[-1], out_features=self.out_size)
+        self.lin = lecun_linear(ch_list[-1], out_features=self.out_size)
         near_zero_init(self.lin)
         self.batch_norm = nn.BatchNorm1d(self.in_size)
         self.scale_factor = torch.zeros(1, device=args.device)
@@ -217,8 +217,8 @@ class AdditiveNodeFeatureCoupling(Coupling):
         self.out_size = num_features * num_masked_cols
         self.rgcn = RGCN(num_features, ch_list['gcn'], out_channels=ch_list['hidden'][0],
                          edge_dim=self.num_bonds, dropout=0.).to(args.device)
-        self.lin1 = nn.Linear(ch_list['hidden'][0], out_features=ch_list['hidden'][1])
-        self.lin2 = nn.Linear(ch_list['hidden'][1], out_features=self.out_size)
+        self.lin1 = lecun_linear(ch_list['hidden'][0], out_features=ch_list['hidden'][1])
+        self.lin2 = lecun_linear(ch_list['hidden'][1], out_features=self.out_size)
         near_zero_init(self.lin2)
         self.scale_factor = torch.zeros(1, device=args.device)
         self.batch_norm = nn.BatchNorm1d(ch_list['hidden'][0])

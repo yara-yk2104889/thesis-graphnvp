@@ -63,7 +63,12 @@ class GraphNvpModel(nn.Module):
                           ch_list=self.mlp_channels)]
         self.transforms = nn.ModuleList(transforms)
 
-    def forward(self, adj, x):
+    def forward(self, adj, x, adj_noise=None):
+        """
+        :param adj_noise: dequantization noise for A, added after the X-couplings. If None, fresh
+            U(0, 0.9) noise is used in training mode and no noise in eval mode. Pass fixed noise
+            to evaluate the dequantized likelihood reproducibly (e.g. the validation NLL).
+        """
         h = x.clone()
         sum_log_det_jacs_x = torch.zeros(h.shape[0], device=args.device, requires_grad=True)
         sum_log_det_jacs_adj = torch.zeros(h.shape[0], device=args.device, requires_grad=True)
@@ -72,8 +77,10 @@ class GraphNvpModel(nn.Module):
             h, log_det_jacobians = self.transforms[i](h, adj)
             sum_log_det_jacs_x = sum_log_det_jacs_x + log_det_jacobians 
         # As in the official code, dequantize A only after the X-couplings (which see the
-        # clean one-hot A) and only while training
-        if self.training:
+        # clean one-hot A); by default only while training
+        if adj_noise is not None:
+            adj = adj + adj_noise
+        elif self.training:
             adj = adj + 0.9 * torch.rand(adj.shape, device=adj.device)
         for i in range(self.num_coupling['channel'], len(self.transforms)):
             adj, log_det_jacobians = self.transforms[i](adj)

@@ -39,8 +39,11 @@ def sample_z(model, batch_size=args.batch_size, z_mu=None):
     return z.detach()
 
 def main():
-    args.cuda = torch.cuda.is_available()
-    args.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # Use the requested --device; never fall back to the CPU silently when a GPU was asked for
+    if args.device.startswith('cuda') and not torch.cuda.is_available():
+        sys.exit('--device {} was requested but PyTorch sees no GPU '
+                 '(check CUDA_VISIBLE_DEVICES and nvidia-smi, or pass --device cpu)'.format(args.device))
+    args.cuda = args.device.startswith('cuda')
     print(args)
     if args.data_name == 'qm9':
         from data import transform_qm9
@@ -171,19 +174,29 @@ def main():
 
     def validation_nll(model):
         """
-        Same loss as in training, on the clean validation molecules: eval mode (no A noise,
-        BatchNorm running statistics), no X noise, no gradients
+        Same loss as in training on the validation molecules, in eval mode (BatchNorm running
+        statistics) and without gradients. Returns (dequantized, clean):
+        - dequantized: X and A dequantized as in training (A after the X-couplings), with the
+          same fixed noise every epoch. Comparable with the training loss.
+        - clean: on the one-hot inputs without noise. NOT comparable with the training loss
+          (the model is trained on noisy points inside the dequantization cells).
         """
         model.eval()
-        total, count = 0., 0
+        # CPU generator: the same noise every epoch and on every device
+        generator = torch.Generator().manual_seed(0)
+        total_deq, total_clean, count = 0., 0., 0
         with torch.no_grad():
             for X, A, label in valid_loader:
                 X, A = X.float().to(args.device), A.float().to(args.device)
-                z, sum_log_det_jacs = model(A, X)
+                x_noise = (0.9 * torch.rand(X.shape, generator=generator)).to(args.device)
+                adj_noise = (0.9 * torch.rand(A.shape, generator=generator)).to(args.device)
                 # log_prob averages over the batch; weight by batch size for the mean over all molecules
-                total += model.log_prob(z, sum_log_det_jacs).item() * X.shape[0]
+                z, sum_log_det_jacs = model(A, X + x_noise, adj_noise=adj_noise)
+                total_deq += model.log_prob(z, sum_log_det_jacs).item() * X.shape[0]
+                z, sum_log_det_jacs = model(A, X)
+                total_clean += model.log_prob(z, sum_log_det_jacs).item() * X.shape[0]
                 count += X.shape[0]
-        return total / count
+        return total_deq / count, total_clean / count
 
     loss_csv = joinpath(args.model_save_dir, 'losses.csv')
 
@@ -195,7 +208,7 @@ def main():
                 rows = [line for line in f.read().splitlines()[1:] if int(line.split(',')[0]) <= start_epoch]
         os.makedirs(args.model_save_dir, exist_ok=True)
         with open(loss_csv, 'w') as f:
-            f.write('epoch,train_loss,valid_nll\n')
+            f.write('epoch,train_loss,valid_nll,valid_nll_clean\n')
             for line in rows:
                 f.write(line + '\n')
 
@@ -234,10 +247,11 @@ def main():
             pbar.close()
 
             train_loss = float(np.mean(batch_g_losses))
-            valid_nll = validation_nll(model)
-            print('Epoch %d | train loss %.5f | validation NLL %.5f' % (epoch, train_loss, valid_nll))
+            valid_nll, valid_nll_clean = validation_nll(model)
+            print('Epoch %d | train loss %.5f | validation NLL %.5f (clean inputs: %.5f)'
+                  % (epoch, train_loss, valid_nll, valid_nll_clean))
             with open(loss_csv, 'a') as f:
-                f.write('%d,%.6f,%.6f\n' % (epoch, train_loss, valid_nll))
+                f.write('%d,%.6f,%.6f,%.6f\n' % (epoch, train_loss, valid_nll, valid_nll_clean))
 
             if epoch % args.save_epochs == 0 or epoch == args.epochs:
                 print("Saving GraphNVP model trained with maximum liklihood")

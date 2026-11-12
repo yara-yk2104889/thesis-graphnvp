@@ -20,6 +20,7 @@ Each change is its own git commit (hash in the last column).
 | 9 | `train_mle.py` | Resume runs epochs `resume_epoch + 1 … epochs` | The port's `range(1 + start, epochs + 1 − start)` skipped epochs, or trained none at all when resuming at or after the halfway point | `c915463` |
 | 10 | `train.sh`, `train_mle.py`, `utils/argparser.py` | 60 epochs, checkpoint every 10 (new `--save_epochs`, last epoch always saved) | Official `scripts/train_qm9.sh` (`-x 60 --save_epochs 10`); the port's script trained 10 epochs | `b197541` |
 | 11 | `train_mle.py` | ZINC hidden sizes [256, 64] | Official `train_model.py`; the port had them reversed, [64, 256]. Only affects ZINC runs | `cb5b368` |
+| 12 | `graph_nvp/mlp.py`, `graph_nvp/coupling.py`, `graph_nvp/rgcn.py` | All hidden linear layers initialized like Chainer's default: weights N(0, 1/fan_in) (LeCun normal), biases 0 | The official code uses Chainer's default initialization; the port used PyTorch's (weight std 1/√(3·fan_in), random biases), so its initial weights were about 0.58× smaller. The last layers keep their 1e-10 init | not committed |
 
 ## 2. Training infrastructure: no effect on the model or the optimization
 
@@ -27,7 +28,9 @@ Each change is its own git commit (hash in the last column).
 |---|---|---|
 | `train_mle.py` | Checkpoints hold model weights, Adam state and epoch, and `--resume` restores all three, as the official Chainer snapshot does. Old weights-only checkpoints still load, with a warning | `02473b1` |
 | `train_mle.py`, `graph_nvp/nvp_model.py` | Checkpoints also store the model hyperparameters and training arguments; batch norm is taken from the hyperparameters, not the command line | `7354a01` |
-| `train_mle.py` | Per epoch, `losses.csv` in the checkpoint folder: mean training loss, and validation NLL (same loss, eval mode, no dequantization noise, no gradients) | `cd9bd01` |
+| `train_mle.py` | Per epoch, `losses.csv` in the checkpoint folder: mean training loss, and validation NLL (same loss, eval mode, no gradients) | `cd9bd01` |
+| `train_mle.py`, `graph_nvp/nvp_model.py` | `valid_nll` in `losses.csv` is now dequantized like training (A noise after the X-couplings, via a new `adj_noise` argument of `forward`), with the same fixed noise every epoch, so it is comparable with the training loss. The clean, noise-free value is kept as `valid_nll_clean`; it is not comparable with the training loss (on a small test run it came out *below* the training loss, which would hide overfitting) | not committed |
+| `train_mle.py` | `--device` is respected; training stops with an error if a GPU is requested but none is visible, instead of silently running on the CPU | not committed |
 | `train_mle.py`, `utils/argparser.py` | `--subset n` for quick tests (first n training / n//10 validation molecules; default: all) | `ec6d95b` |
 | `utils/sascorer.py` | `rdkit.six` (removed from RDKit) replaced by `dict.items()` | `8bc5f6e` |
 | `requirements.txt` | Pinned, tested versions: Python 3.12, torch 2.14.1, numpy 2.5.4, RDKit 2026.09.1 (cite these in the thesis) | `0fa3053` |
@@ -60,12 +63,14 @@ The metrics are defined as follows:
 - **Loss.** Both repos use `(nll_x + nll_adj) / 2`, each part being the Gaussian NLL of z minus the log-determinant, divided by the number of dimensions. They agree exactly on random inputs.
   - Both repos subtract the dimension count from the log-determinant, which adds a constant **+1** to the loss. This doesn't affect training, but the loss values are not standard nats per dimension.
   - With additive couplings the log-determinant is 0 in both repos.
+  - The objective averages X and A *per dimension* (X: 45 dimensions, A: 324), so each X dimension weighs 7.2× more than each A dimension compared with maximum likelihood of the joint. It is the official GraphNVP objective, not the joint NLL in nats; don't compare its values with other models' likelihoods.
 - **Sampling temperature convention** (see section 3).
 - **Dequantization of X:** uniform noise U(0, 0.9) in both repos. The official code adds it inside the model and the port adds it in the training loop, which gives the same result.
 
 ## 5. Remaining differences and caveats
 
 - **Learned prior variance:** `ln_var` is initialized to 1e-5 in the port and to 0 in the official code. The difference is negligible.
+- **Output scale of the couplings:** the official code multiplies by `exp(2·scale_factor)`, the port by `exp(weight)` (`Rescale` in `coupling.py`). Same functions and same starting value (1), but the gradient on the scale parameter is half as large, so under Adam it moves about 2× slower.
 - **Left as they were** (no effect on QM9 runs):
   - The `-lr_decay_*` flags are unused.
   - The affine coupling classes are still in `coupling.py` but are no longer used.
@@ -81,4 +86,8 @@ The metrics are defined as follows:
   - the X-couplings invert, to below 1e-4;
   - the A-couplings invert on dequantized A, to below 1e-4;
   - `reverse(forward(A, X))` recovers the one-hot A exactly and X to below 1e-4.
-- **`tests/test_smoke.py`** (`8d0949b`) trains the `train.sh` model for 1 epoch on 500 molecules, checks the checkpoint and `losses.csv`, then runs `evaluate.py` and checks its outputs.
+- **`tests/test_smoke.py`** (`8d0949b`) trains the `train.sh` model for 1 epoch on 500 molecules, checks the checkpoint and `losses.csv`, then runs `evaluate.py` and checks its outputs. With `SMOKE_DEVICE=cuda` it runs on the GPU (not committed).
+- **`tests/test_model_behaviour.py`** (not committed), on the official QM9 model and a real batch:
+  - the A noise enters after the X-couplings: the X-couplings see the clean A, the A-couplings exactly A + noise (these checks fail on the port's original noise placement);
+  - training mode adds fresh noise to A only; eval mode adds none; the training noise is within [0, 0.9) with mean 0.45;
+  - every parameter gets a finite gradient and is updated within 3 Adam steps.
