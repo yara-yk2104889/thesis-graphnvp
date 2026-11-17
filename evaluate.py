@@ -46,6 +46,7 @@ eval_args = parser.parse_args()
 sys.argv = sys.argv[:1]
 
 import numpy as np
+import rdkit
 import torch
 from rdkit import Chem, RDLogger
 from torch.utils.data import Subset
@@ -132,8 +133,11 @@ def training_split_smiles(train_args, atomic_num_list, cache_dir=None):
 
     cache_path = None
     if cache_dir is not None:
+        # The RDKit version is part of the key: canonical SMILES can change between versions,
+        # so a cache written by another version must not be reused
         key = hashlib.sha256(json.dumps({'version': CACHE_VERSION, 'npz_sha256': file_sha256(npz_path),
-                                         'train_idx': train_idx, 'atomic_num_list': atomic_num_list}
+                                         'train_idx': train_idx, 'atomic_num_list': atomic_num_list,
+                                         'rdkit': rdkit.__version__}
                                         ).encode()).hexdigest()
         cache_path = joinpath(cache_dir, 'train_smiles_{}_{}.json'.format(data_name, key[:16]))
         if os.path.exists(cache_path):
@@ -231,6 +235,7 @@ def main():
         'checkpoint_epoch': checkpoint.get('epoch'),
         'n': eval_args.n, 'temp': eval_args.temp, 'seed': eval_args.seed,
         'git_commit': commit, 'git_uncommitted_changes': dirty,
+        'rdkit_version': rdkit.__version__,
         'counts': {status: statuses.count(status)
                    for status in ['valid', 'valid_disconnected', 'invalid', 'too_small']},
         'valid': rates(valid_smiles, train_smiles, eval_args.n),

@@ -20,7 +20,7 @@ Each change is its own git commit (hash in the last column).
 | 9 | `train_mle.py` | Resume runs epochs `resume_epoch + 1 … epochs` | The port's `range(1 + start, epochs + 1 − start)` skipped epochs, or trained none at all when resuming at or after the halfway point | `c915463` |
 | 10 | `train.sh`, `train_mle.py`, `utils/argparser.py` | 60 epochs, checkpoint every 10 (new `--save_epochs`, last epoch always saved) | Official `scripts/train_qm9.sh` (`-x 60 --save_epochs 10`); the port's script trained 10 epochs | `b197541` |
 | 11 | `train_mle.py` | ZINC hidden sizes [256, 64] | Official `train_model.py`; the port had them reversed, [64, 256]. Only affects ZINC runs | `cb5b368` |
-| 12 | `graph_nvp/mlp.py`, `graph_nvp/coupling.py`, `graph_nvp/rgcn.py` | All hidden linear layers initialized like Chainer's default: weights N(0, 1/fan_in) (LeCun normal), biases 0 | The official code uses Chainer's default initialization; the port used PyTorch's (weight std 1/√(3·fan_in), random biases), so its initial weights were about 0.58× smaller. The last layers keep their 1e-10 init | not committed |
+| 12 | `graph_nvp/mlp.py`, `graph_nvp/coupling.py`, `graph_nvp/rgcn.py` | All hidden linear layers initialized like Chainer's default: weights N(0, 1/fan_in) (LeCun normal), biases 0 | The official code uses Chainer's default initialization; the port used PyTorch's (weight std 1/√(3·fan_in), random biases), so its initial weights were about 0.58× smaller. The last layers keep their 1e-10 init | `e01689e` |
 
 ## 2. Training infrastructure: no effect on the model or the optimization
 
@@ -29,11 +29,12 @@ Each change is its own git commit (hash in the last column).
 | `train_mle.py` | Checkpoints hold model weights, Adam state and epoch, and `--resume` restores all three, as the official Chainer snapshot does. Old weights-only checkpoints still load, with a warning | `02473b1` |
 | `train_mle.py`, `graph_nvp/nvp_model.py` | Checkpoints also store the model hyperparameters and training arguments; batch norm is taken from the hyperparameters, not the command line | `7354a01` |
 | `train_mle.py` | Per epoch, `losses.csv` in the checkpoint folder: mean training loss, and validation NLL (same loss, eval mode, no gradients) | `cd9bd01` |
-| `train_mle.py`, `graph_nvp/nvp_model.py` | `valid_nll` in `losses.csv` is now dequantized like training (A noise after the X-couplings, via a new `adj_noise` argument of `forward`), with the same fixed noise every epoch, so it is comparable with the training loss. The clean, noise-free value is kept as `valid_nll_clean`; it is not comparable with the training loss (on a small test run it came out *below* the training loss, which would hide overfitting) | not committed |
-| `train_mle.py` | `--device` is respected; training stops with an error if a GPU is requested but none is visible, instead of silently running on the CPU | not committed |
+| `train_mle.py`, `graph_nvp/nvp_model.py` | `valid_nll` in `losses.csv` is now dequantized like training (A noise after the X-couplings, via a new `adj_noise` argument of `forward`), with the same fixed noise every epoch, so it is comparable with the training loss. The clean, noise-free value is kept as `valid_nll_clean`; it is not comparable with the training loss (on a small test run it came out *below* the training loss, which would hide overfitting) | `e01689e` |
+| `train_mle.py` | `--device` is respected; training stops with an error if a GPU is requested but none is visible, instead of silently running on the CPU | `e01689e` |
 | `train_mle.py`, `utils/argparser.py` | `--subset n` for quick tests (first n training / n//10 validation molecules; default: all) | `ec6d95b` |
 | `utils/sascorer.py` | `rdkit.six` (removed from RDKit) replaced by `dict.items()` | `8bc5f6e` |
-| `requirements.txt` | Pinned, tested versions: Python 3.12, torch 2.14.1, numpy 2.5.4, RDKit 2026.09.1 (cite these in the thesis) | `0fa3053` |
+| `requirements.txt` | Pinned, tested versions: Python 3.12, torch 2.14.1, numpy 2.5.4, RDKit 2024.03.5 (cite these in the thesis). The same RDKit version is pinned on every machine because its canonical SMILES can change between versions, and `evaluate.py` compares canonical SMILES to measure novelty | `0fa3053`, not committed |
+| `evaluate.py` | The RDKit version is part of the training-SMILES cache key, so a cache written by another version is never reused, and it is recorded in the result JSON as `rdkit_version` | not committed |
 | `make_archive.sh`, `evaluate.py` | Zip of a commit for machines without GitHub; it includes a `COMMIT` file, which `evaluate.py` records when there is no `.git` | `2f3fc03`, `9312b2e` |
 | `graph_nvp/rgcn.py`, `utils/argparser.py` | Removed the unused `self.weight` parameter of `RelationGraphConvolution` and the unused `--num_gcn_layer` flag. The model's outputs don't depend on them; the QM9 parameter count drops from 6,201,127 to 6,145,831, and for a given seed the random initial weights differ (one tensor fewer is initialized) | `cb5b368` |
 
@@ -86,8 +87,8 @@ The metrics are defined as follows:
   - the X-couplings invert, to below 1e-4;
   - the A-couplings invert on dequantized A, to below 1e-4;
   - `reverse(forward(A, X))` recovers the one-hot A exactly and X to below 1e-4.
-- **`tests/test_smoke.py`** (`8d0949b`) trains the `train.sh` model for 1 epoch on 500 molecules, checks the checkpoint and `losses.csv`, then runs `evaluate.py` and checks its outputs. With `SMOKE_DEVICE=cuda` it runs on the GPU (not committed).
-- **`tests/test_model_behaviour.py`** (not committed), on the official QM9 model and a real batch:
+- **`tests/test_smoke.py`** (`8d0949b`) trains the `train.sh` model for 1 epoch on 500 molecules, checks the checkpoint and `losses.csv`, then runs `evaluate.py` and checks its outputs. With `SMOKE_DEVICE=cuda` it runs on the GPU (`e01689e`).
+- **`tests/test_model_behaviour.py`** (`e01689e`), on the official QM9 model and a real batch:
   - the A noise enters after the X-couplings: the X-couplings see the clean A, the A-couplings exactly A + noise (these checks fail on the port's original noise placement);
   - training mode adds fresh noise to A only; eval mode adds none; the training noise is within [0, 0.9) with mean 0.45;
   - every parameter gets a finite gradient and is updated within 3 Adam steps.

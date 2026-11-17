@@ -14,7 +14,11 @@
 
 torch==2.14.1
 numpy==2.5.4
-rdkit==2026.9.1
+# Pinned to the same version on every machine: RDKit's canonical SMILES can change between
+# versions, and evaluate.py compares canonical SMILES to measure novelty.
+# 2024.3.5 is also the newest version that loads under Windows Smart App Control (newer wheels
+# are blocked with "An Application Control policy has blocked this file").
+rdkit==2024.3.5
 tqdm==4.70.1
 networkx==3.6.1
 tabulate==0.10.0
